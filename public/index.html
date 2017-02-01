@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>MRR Explorer</title>
+
+	<!-- Latest compiled and minified CSS -->
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+	<link rel="stylesheet" type="text/css" href="//cdn.jsdelivr.net/bootstrap.daterangepicker/2/daterangepicker.css" />
+
+	<!-- Optional theme -->
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
+
+	<!-- Latest compiled and minified JavaScript -->
+	<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+	<script type="text/javascript" src="//cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+	<script type="text/javascript" src="//cdn.jsdelivr.net/bootstrap.daterangepicker/2/daterangepicker.js"></script>
+
+	<style type="text/css">
+		h1 {
+			text-align: center;
+			margin: 1em 0em;
+		}
+
+		table {
+			margin: 0 auto;
+		}
+
+		.overline {
+			border-top: 1px solid black;
+		}
+
+		.overline-bold {
+			border-top: 2px solid black;
+		}
+
+		.italic {
+			font-style: italic;
+		}
+
+		.bold {
+			font-weight: bold;
+		}
+
+		.green {
+			color: hsla(120,50%,50%,1);
+		}
+
+		.red {
+			color: hsla(0,50%,50%,1);	
+		}
+
+		th, td {
+		    padding: 10px 50px;
+    		text-align: right;
+		}
+
+		.transparent {
+			opacity: .1;
+		}
+
+		#loader {
+			display: none;
+			text-align: center;
+			position: absolute;
+			width: 100%;
+			padding: 150px 0px;
+		}
+
+		.show {
+			display: block;
+		}
+
+		.detail {
+			display: none;
+		}
+
+		.expander {
+			cursor: pointer;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="row">
+			<div class="col-md-12">
+				<h1>MRR Explorer</h1>
+				<div style="text-align: center; padding-bottom: 1em;">
+					<div id="range" style="background: #fff; cursor: pointer; padding: 10px 15px; border: 1px solid #ccc; display: inline-block;">
+						<i class="glyphicon glyphicon-calendar fa fa-calendar"></i>&nbsp;
+						<span></span> <b class="caret"></b>
+					</div>
+				</div>
+				<div id="loader">
+					Loading…
+				</div>
+				<div id="content">
+					<table>
+						<thead>
+							<tr><th style="padding: 10px;"></th><th></th>				<th>Volume ($)</th>				<th>Companies</th></tr>
+						</thead>
+						<tbody>
+							<tr class="bold">
+								<td style="padding: 10px;"></td><td>New business</td>	<td id="new-biz-volume"></td>	<td id="new-biz-distinct"></td>
+							</tr>
+
+
+							<tr id="upsell" class="overline-bold italic green">
+								<td class="expander" style="padding: 10px;">+</td><td>Upsell</td>			<td id="upsell-volume"></td>	<td id="upsell-distinct"></td>
+							</tr>
+							
+
+							<tr id="downsell" class="overline italic red">
+								<td class="expander" style="padding: 10px;">+</td><td>Downsell</td>		<td id="downsell-volume"></td>	<td id="downsell-distinct"></td>
+							</tr>
+							
+
+							<tr id="churn" class="overline italic red">
+								<td class="expander" style="padding: 10px;">+</td><td>Churn</td>			<td id="churn-volume"></td>		<td id="churn-distinct"></td>
+							</tr>
+							
+
+							<tr id="total-cs" class="overline bold">
+								<td class="expander" style="padding: 10px;">+</td><td>Total CS</td>		<td id="total-cs-volume"></td>	<td id="total-cs-distinct"></td>
+							</tr>
+							
+
+							<tr class="overline-bold bold">
+								<td style="padding: 10px;"></td><td>Total Movement</td>	<td id="total-volume"></td>		<td id="total-distinct"></td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+	<script type="text/javascript">
+		function getJSON(url) {
+			return new Promise(function(resolve, reject) {
+				var xhr = new XMLHttpRequest();
+				xhr.open('get', url, true);
+				xhr.responseType = 'json';
+				xhr.onload = function() {
+					var status = xhr.status;
+					if (status == 200) {
+						resolve(xhr.response);
+					} else {
+						reject(status);
+					}
+				};
+				xhr.send();
+			});
+		};
+
+		function showLoader() {
+			document.getElementById('content').classList.add('transparent');
+			document.getElementById('loader').classList.add('show');
+		}
+
+		function hideLoader() {
+			document.getElementById('content').classList.remove('transparent');
+			document.getElementById('loader').classList.remove('show');
+		}
+
+		function trFromData(name, section) {
+			var totalValue = 0;
+			var totalCount = 0;
+
+			for (var i = 2; i < arguments.length; i++) {
+				if(!!arguments[i]) {
+					totalValue += Math.round(arguments[i].value / 100);
+					totalCount += arguments[i].count;
+				}
+			}
+
+			return '<tr class="detail detail-'+section+'"><td style="padding: 10px;"></td><td>'+name+'</td> <td>'+totalValue+'</td> <td>'+totalCount+'</td></tr>';
+		}
+
+		function fetchMRR(from, to) {
+			$('#range span').html(from + ' - ' + to);
+			showLoader();
+
+			getJSON('/mrr?from='+from+'&to='+to).then(function (data) {
+				hideLoader();
+				window.data = data;
+
+				$('.detail').remove();
+				$('.expander').text('+');
+
+				// New biz display
+				$('#new-biz-volume').html(Math.round(data.new_biz.value / 100));
+				$('#new-biz-distinct').html(data.new_biz.count);
+
+				var managers = {};
+
+				// CS display
+				$('#upsell-volume').html(Math.round(data.upsell.value / 100));
+				$('#upsell-distinct').html(data.upsell.count);
+				var detail = '';
+				for (var i in data.upsell.managers) {
+					detail += trFromData(i, 'upsell', data.upsell.managers[i]);
+					managers[i] = true;
+				}
+				$('#upsell').after(detail);
+
+				$('#downsell-volume').html(Math.round(data.downsell.value / 100));
+				$('#downsell-distinct').html(data.downsell.count);
+				var detail = '';
+				for (var i in data.downsell.managers) {
+					detail += trFromData(i, 'downsell', data.downsell.managers[i]);
+					managers[i] = true;
+				}
+				$('#downsell').after(detail);
+
+				$('#churn-volume').html(Math.round(data.churn.value / 100));
+				$('#churn-distinct').html(data.churn.count);
+				var detail = '';
+				for (var i in data.churn.managers) {
+					detail += trFromData(i, 'churn', data.churn.managers[i]);
+					managers[i] = true;
+				}
+				$('#churn').after(detail);
+
+				$('#total-cs-volume').html(Math.round((data.upsell.value + data.downsell.value + data.churn.value) / 100));
+				$('#total-cs-distinct').html(data.upsell.count + data.downsell.count + data.churn.count);
+				var detail = '';
+				for (var i in managers)
+					detail += trFromData(i, 'total-cs', data.upsell.managers[i], data.downsell.managers[i], data.churn.managers[i]);
+				$('#total-cs').after(detail);
+
+				// Overall display
+				$('#total-volume').html(Math.round((data.new_biz.value + data.upsell.value + data.downsell.value + data.churn.value) / 100));
+				$('#total-distinct').html('N/A');
+			}, function (err) {
+				console.log(err);
+			});
+		}
+
+		var defaultStart = moment().startOf('month').format('YYYY-MM-DD'),
+			defaultEnd = moment().endOf('month').format('YYYY-MM-DD');
+
+		$('#range').daterangepicker({
+			ranges: {
+			 'Forever': [moment('2013-06-01'), moment().startOf('day')],
+			 'Yesterday': [moment().subtract(1, 'days'), moment().startOf('day')],
+			 'Last 7 Days': [moment().subtract(6, 'days'), moment()],
+			 'Last 30 Days': [moment().subtract(29, 'days'), moment()],
+			 'This Month': [moment().startOf('month'), moment().endOf('month')],
+			 'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+			},
+			locale: {
+				format: 'YYYY-MM-DD'
+			},
+			startDate: defaultStart,
+			endDate:  defaultEnd
+		}, function(start, end, label) {
+			fetchMRR(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD'));
+		});
+
+		$('.expander').click(function() {
+			var section = $(this).parent().attr('id');
+			$(this).text(($(this).text() === '+' ? '-' : '+'));
+			$('.detail-'+section).toggle();
+		});
+
+		fetchMRR(defaultStart, defaultEnd);
+	</script>
+</body>
+</html>
