@@ -153,7 +153,7 @@ Customer.prototype.getMrrAt = function(at) {
 };
 
 Customer.prototype.getNewBizBy = function(by) {
-  var endOfPeriod = Math.min(by, moment.unix(this.first_event.event_created).endOf('month').unix());
+  var endOfPeriod = Math.min(by, moment.unix(this.first_event.event_created).utc().endOf('month').unix());
   return this.getMrrAt(endOfPeriod);
 }
 
