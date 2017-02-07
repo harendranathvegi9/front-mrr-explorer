@@ -11,6 +11,12 @@ var app = express();
 app.use(express.static('public'));
 app.use(bodyParser.json({limit: '50mb'}));
 
+var jsforce = require('jsforce');
+var conn = new jsforce.Connection();
+var sfdc_login = process.env.SFDC_LOGIN;
+var sfdc_password = process.env.SFDC_PASSWORD;
+var sfdc_token = process.env.SFDC_TOKEN;
+
 var TOTANGO_KEY = process.env.TOTANGO_KEY,
     async = require('async'),
     crypto = require('crypto'),
@@ -170,76 +176,95 @@ Customer.prototype.getMovementBetween = function(fr, to) {
 
 var stripe_to_id = {},
     customers = [],
-    owners = {};
+    owners = {},
+    assists = [];
 
 var updateData = function() {  
   console.log('Updating data', Date.now());
 
-  // Get Customer Success account owners
-  getCustomerSuccessSplit(function (err, accounts) {
-    owners = {};
-    accounts.forEach(function(acc) {
-      var owner = acc.selected_fields[0],
-          id = parseInt(acc.name);
-      owners[id] = (owner === 'Cori Morris') ? 'self-served' : owner;
-    });
+  // Get closed won that were sales assisted
+  getSalesAssistedAccounts(function (err, results) {
+    assists = results;
 
-
-    // Get map from stripe_id to company_id
-    var query = 'SELECT id, stripe_id FROM front.companies WHERE stripe_id is not null;';
-
-    var redshiftClient = new Redshift(client);
-    redshiftClient.query(query, function (err, table) {
-
-      if(err) return console.error('could not query db', err);
-
-      stripe_to_id = {};
-      table.rows.forEach(function (company) {
-        stripe_to_id[company.stripe_id] = company.id;
+    // Get Customer Success account owners
+    getCustomerSuccessSplit(function (err, accounts) {
+      owners = {};
+      accounts.forEach(function(acc) {
+        var owner = acc.selected_fields[0],
+            id = parseInt(acc.name);
+        owners[id] = (owner === 'Cori Morris') ? 'self-served' : owner;
       });
 
 
-      // Get all subscription events
-      var query = 'SELECT * FROM stripe.events;';
+      // Get map from stripe_id to company_id
+      var query = 'SELECT id, stripe_id FROM front.companies WHERE stripe_id is not null;';
 
       var redshiftClient = new Redshift(client);
-      redshiftClient.query(query, function (err, events) {
+      redshiftClient.query(query, function (err, table) {
 
         if(err) return console.error('could not query db', err);
 
-        // Get all discount events
-        var query = 'SELECT * FROM stripe.customer_discounts;';
+        stripe_to_id = {};
+        table.rows.forEach(function (company) {
+          stripe_to_id[company.stripe_id] = company.id;
+        });
+
+
+        // Get all subscription events
+        var query = 'SELECT * FROM stripe.events;';
 
         var redshiftClient = new Redshift(client);
-        redshiftClient.query(query, function (err, discounts) {
+        redshiftClient.query(query, function (err, events) {
 
           if(err) return console.error('could not query db', err);
 
-          var event_history = {};
+          // Get all discount events
+          var query = 'SELECT * FROM stripe.customer_discounts;';
 
-          events.rows.forEach(function (event) {
-            if (typeof event_history[event.customer] === 'undefined')
-              event_history[event.customer] = [event];
-            else
-              event_history[event.customer].push(event);
+          var redshiftClient = new Redshift(client);
+          redshiftClient.query(query, function (err, discounts) {
+
+            if(err) return console.error('could not query db', err);
+
+            var event_history = {};
+
+            events.rows.forEach(function (event) {
+              if (typeof event_history[event.customer] === 'undefined')
+                event_history[event.customer] = [event];
+              else
+                event_history[event.customer].push(event);
+            });
+
+            discounts.rows.forEach(function (discount) {
+              if (typeof event_history[discount.customer] === 'undefined')
+                event_history[discount.customer] = [discount];
+              else
+                event_history[discount.customer].push(discount);
+            });
+
+            customers = [];
+
+            _.each(event_history, function (customer_events, customer) {
+              customers.push(new Customer(customer, customer_events));
+            });
+
+            console.log('Updated', Date.now());
           });
-
-          discounts.rows.forEach(function (discount) {
-            if (typeof event_history[discount.customer] === 'undefined')
-              event_history[discount.customer] = [discount];
-            else
-              event_history[discount.customer].push(discount);
-          });
-
-          customers = [];
-
-          _.each(event_history, function (customer_events, customer) {
-            customers.push(new Customer(customer, customer_events));
-          });
-
-          console.log('Updated', Date.now());
         });
-      });  
+      });
+    });
+  });
+};
+
+var getSalesAssistedAccounts = function (done) {
+  conn.login(sfdc_login, sfdc_password+sfdc_token, function (err, res) {
+    if (err) { return console.error(err); }
+
+    conn.query('SELECT Id, Stripe_Id__c FROM Opportunity WHERE AE_touch__c = true AND Stripe_Id__c != null', function (err, res) {
+      if (err) { return done(err); }
+
+      var assists =  res.records.map(function (record) { return record.Stripe_Id__c; });
+      return done(null, assists);
     });
   });
 };
@@ -291,7 +316,7 @@ app.get('/mrr', auth, function (req, res) {
 
   console.log(mrrIs - mrrWas, mrrIs / mrrWas);
 
-  var newBiz = {count: 0, value: 0, managers: {}};
+  var newBiz = {count: 0, value: 0, assisted: {}};
   var upsell = {count: 0, value: 0, managers: {}};
   var downsell = {count: 0, value: 0, managers: {}};
   var churn = {count: 0, value: 0, managers: {}};
@@ -305,6 +330,14 @@ app.get('/mrr', auth, function (req, res) {
     if (mrr.newBiz !== 0) {
       newBiz.count++;
       newBiz.value += mrr.newBiz;
+      
+      var assist = assists.indexOf(customer.id) !== -1 ? 'Sales assisted' : 'self-served';
+      if (typeof newBiz.assisted[assist] === 'undefined') {
+        newBiz.assisted[assist] = {count: 1, value: mrr.newBiz};
+      } else {
+        newBiz.assisted[assist].count++;
+        newBiz.assisted[assist].value += mrr.newBiz;
+      }
     }
 
     if (mrr.movement > 0) {
@@ -315,14 +348,10 @@ app.get('/mrr', auth, function (req, res) {
       if (typeof upsell.managers[manager] === 'undefined')
         upsell.managers[manager] = {count: 1, value: mrr.movement}
       else {
-        upsell.managers[manager].count ++;
+        upsell.managers[manager].count++;
         upsell.managers[manager].value += mrr.movement;
       }
     }
-
-    // if (mrr.newBiz > 0 && mrr.newBiz < 14500) {
-    //   console.log(customer.id + ',' + mrr.newBiz + ',' + (mrr.movement + mrr.churn));
-    // }
 
     if (mrr.movement < 0) {
       downsell.count++;
@@ -332,7 +361,7 @@ app.get('/mrr', auth, function (req, res) {
       if (typeof downsell.managers[manager] === 'undefined')
         downsell.managers[manager] = {count: 1, value: mrr.movement}
       else {
-        downsell.managers[manager].count ++;
+        downsell.managers[manager].count++;
         downsell.managers[manager].value += mrr.movement;
       }
     }
@@ -345,10 +374,14 @@ app.get('/mrr', auth, function (req, res) {
       if (typeof churn.managers[manager] === 'undefined')
         churn.managers[manager] = {count: 1, value: mrr.churn}
       else {
-        churn.managers[manager].count ++;
+        churn.managers[manager].count++;
         churn.managers[manager].value += mrr.churn;
       }
     }
+
+    // if (mrr.newBiz > 0 && mrr.newBiz < 14500) {
+    //   console.log(customer.id + ',' + mrr.newBiz + ',' + (mrr.movement + mrr.churn));
+    // }
   });
 
   res.send({
