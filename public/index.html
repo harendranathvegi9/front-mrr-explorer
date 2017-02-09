@@ -256,12 +256,12 @@
 		$('#range').daterangepicker({
 			ranges: {
 			 'Forever': [moment('2013-06-01'), moment().startOf('day')],
-			 'Last Week': [moment().subtract(1, 'week').startOf('week'), moment().subtract(1, 'week').endOf('week')],
-			 'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')],
-			 'Last Quarter': [moment().subtract(1, 'quarter').startOf('quarter'), moment().subtract(1, 'quarter').endOf('quarter')],
 			 'This Week': [moment().startOf('week'), moment().endOf('week')],
+			 'Last Week': [moment().subtract(1, 'week').startOf('week'), moment().subtract(1, 'week').endOf('week')],
 			 'This Month': [moment().startOf('month'), moment().endOf('month')],
-			 'This Quarter': [moment().startOf('quarter'), moment().endOf('quarter')]
+			 'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')],
+			 'This Quarter': [moment().startOf('quarter'), moment().endOf('quarter')],
+			 'Last Quarter': [moment().subtract(1, 'quarter').startOf('quarter'), moment().subtract(1, 'quarter').endOf('quarter')],
 			},
 			locale: {
 				format: 'YYYY-MM-DD'
