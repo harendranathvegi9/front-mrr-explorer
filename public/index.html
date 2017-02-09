@@ -79,6 +79,11 @@
 		.expander {
 			cursor: pointer;
 		}
+
+		.data {
+		    margin: 0 auto;
+			max-width: 600px;
+		}
 	</style>
 </head>
 <body>
@@ -131,6 +136,11 @@
 							</tr>
 						</tbody>
 					</table>
+					<hr>
+					<div class="data">
+						<p>Current # of customers: <strong id="customers">0</strong></p>
+						<p>Current quarter quota completion: <strong id="quota">0%</strong></p>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -194,7 +204,6 @@
 				var detail = '';
 				for (var i in data.new_biz.assisted) detail += trFromData(i, 'new-biz', data.new_biz.assisted[i]);
 				$('#new-biz').after(detail);
-			console.log(detail);
 
 				var managers = {};
 
@@ -247,11 +256,12 @@
 		$('#range').daterangepicker({
 			ranges: {
 			 'Forever': [moment('2013-06-01'), moment().startOf('day')],
-			 'Yesterday': [moment().subtract(1, 'days'), moment().startOf('day')],
-			 'Last 7 Days': [moment().subtract(6, 'days'), moment()],
-			 'Last 30 Days': [moment().subtract(29, 'days'), moment()],
+			 'Last Week': [moment().subtract(1, 'week').startOf('week'), moment().subtract(1, 'week').endOf('week')],
+			 'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')],
+			 'Last Quarter': [moment().subtract(1, 'quarter').startOf('quarter'), moment().subtract(1, 'quarter').endOf('quarter')],
+			 'This Week': [moment().startOf('week'), moment().endOf('week')],
 			 'This Month': [moment().startOf('month'), moment().endOf('month')],
-			 'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+			 'This Quarter': [moment().startOf('quarter'), moment().endOf('quarter')]
 			},
 			locale: {
 				format: 'YYYY-MM-DD'
@@ -268,7 +278,18 @@
 			$('.detail-'+section).toggle();
 		});
 
+		function updateStats() {
+			getJSON('/quota').then(function (data) {
+				$('#quota').text( Math.round(data.quota * 1000) / 10 + '%').css('color', 'hsl('+data.quota * 120+', 50%, 50%)');
+			});
+
+			getJSON('/customers').then(function (data) {
+				$('#customers').text(data.count);
+			});
+		}
+
 		fetchMRR(defaultStart, defaultEnd);
+		updateStats();
 	</script>
 </body>
 </html>

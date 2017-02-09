@@ -179,6 +179,13 @@ var stripe_to_id = {},
     owners = {},
     assists = [];
 
+var arrGoals = {
+  q1: 84583900,
+  q2: 134675600,
+  q3: 134608500,
+  q4: 223337100
+};
+
 var updateData = function() {  
   console.log('Updating data', Date.now());
 
@@ -390,6 +397,26 @@ app.get('/mrr', auth, function (req, res) {
     upsell: upsell, 
     downsell: downsell
   });
+});
+
+app.get('/customers', auth, function (req, res) {
+  var now = moment.utc().endOf('day').unix();
+  var count = _.countBy(customers, function (customer) { return customer.getMrrAt(now) > 0 ? 'present' : 'past'; });
+
+  res.send({count: count.present});
+});
+
+app.get('/quota', auth, function (req, res) {
+  var fr = moment.utc().startOf('quarter').unix(),
+    to = moment.utc().endOf('day').unix();
+
+  var mrrWas = _.reduce(customers, function (memo, customer) { return memo + customer.getMrrAt(fr); }, 0);
+  var mrrIs = _.reduce(customers, function (memo, customer) { return memo + customer.getMrrAt(to); }, 0);
+  var addedMrr = mrrIs - mrrWas;
+
+  var currentQuarter = 'q' + moment().utc().quarter();
+  var quota = Math.round(1000 * 12 * addedMrr / arrGoals[currentQuarter]) / 1000;
+  res.send({quota: quota});
 });
 
 var port = process.env.PORT || 2474;
