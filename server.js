@@ -419,5 +419,15 @@ app.get('/quota', auth, function (req, res) {
   res.send({quota: quota});
 });
 
+app.get('/expansion', auth, function (req, res) {
+  var fr = moment.utc().subtract(30, 'days').subtract(1, 'years').unix(),
+    to = moment.utc().subtract(30, 'days').endOf('day').unix();
+
+  var newBiz = _.reduce(customers, function (memo, customer) { return memo + customer.getMovementBetween(fr, to).newBiz; }, 0);
+  var upsell = _.reduce(customers, function (memo, customer) { var move = customer.getMovementBetween(fr, to); return memo + move.movement + move.churn; }, 0);
+
+  res.send({expansion: (upsell / newBiz) + 1});
+});
+
 var port = process.env.PORT || 2474;
 app.listen(port, function () { console.log('App running on port', port); });
