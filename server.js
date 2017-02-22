@@ -180,7 +180,7 @@ var stripe_to_id = {},
     assists = [];
 
 var arrGoals = {
-  q1: 84583900,
+  q1: 73969100,
   q2: 134675600,
   q3: 134608500,
   q4: 223337100
@@ -386,7 +386,7 @@ app.get('/mrr', auth, function (req, res) {
       }
     }
 
-    // if (mrr.newBiz > 0 && mrr.newBiz < 14500) {
+    // if (andersens.indexOf(customer.id) !== -1) {
     //   console.log(customer.id + ',' + mrr.newBiz + ',' + (mrr.movement + mrr.churn));
     // }
   });
