@@ -385,10 +385,6 @@ app.get('/mrr', auth, function (req, res) {
         churn.managers[manager].value += mrr.churn;
       }
     }
-
-    // if (andersens.indexOf(customer.id) !== -1) {
-    //   console.log(customer.id + ',' + mrr.newBiz + ',' + (mrr.movement + mrr.churn));
-    // }
   });
 
   res.send({
@@ -412,7 +408,8 @@ app.get('/quota', auth, function (req, res) {
 
   var mrrWas = _.reduce(customers, function (memo, customer) { return memo + customer.getMrrAt(fr); }, 0);
   var mrrIs = _.reduce(customers, function (memo, customer) { return memo + customer.getMrrAt(to); }, 0);
-  var addedMrr = mrrIs - mrrWas;
+  var temp_shopify_deal = 208333;
+  var addedMrr = mrrIs - mrrWas + temp_shopify_deal;
 
   var currentQuarter = 'q' + moment().utc().quarter();
   var quota = Math.round(1000 * 12 * addedMrr / arrGoals[currentQuarter]) / 1000;
