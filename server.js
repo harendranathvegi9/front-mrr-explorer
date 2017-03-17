@@ -387,6 +387,13 @@ app.get('/mrr', auth, function (req, res) {
     }
   });
 
+  // FIXME: remove once change to SSY billing PSA (26007) has propagated
+  if (to > moment().unix()) {
+    var temp_ssy_deal = 250000;
+    upsell.value += temp_ssy_deal;
+    upsell.managers['Samantha Wong'].value += temp_ssy_deal;
+  }
+
   res.send({
     new_biz: newBiz, 
     churn: churn, 
@@ -408,8 +415,10 @@ app.get('/quota', auth, function (req, res) {
 
   var mrrWas = _.reduce(customers, function (memo, customer) { return memo + customer.getMrrAt(fr); }, 0);
   var mrrIs = _.reduce(customers, function (memo, customer) { return memo + customer.getMrrAt(to); }, 0);
+  // FIXME: remove after Q1
   var temp_shopify_deal = 208333;
-  var addedMrr = mrrIs - mrrWas + temp_shopify_deal;
+  var temp_ssy_deal = 250000;
+  var addedMrr = mrrIs - mrrWas + temp_shopify_deal + temp_ssy_deal;
 
   var currentQuarter = 'q' + moment().utc().quarter();
   var quota = Math.round(1000 * 12 * addedMrr / arrGoals[currentQuarter]) / 1000;
