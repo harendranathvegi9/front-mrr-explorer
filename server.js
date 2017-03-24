@@ -145,6 +145,9 @@ Customer.prototype.getMrrAt = function(at) {
   if (lastSubscriptionEvent.status === 'unpaid')
     return 0;
 
+  if (lastSubscriptionEvent.plan_id.indexOf('billing') !== -1)
+    lastSubscriptionEvent.plan_amount = 1;
+
   var rr = lastSubscriptionEvent.plan_amount * lastSubscriptionEvent.quantity;
   rr = applyDiscount(rr, this.getDiscountAt(at));
   var mrr = (lastSubscriptionEvent.plan_id.indexOf('year') !== -1) ? rr / 12 : rr;
